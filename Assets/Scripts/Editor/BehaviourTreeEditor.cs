@@ -1,7 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using UnityEditor.UIElements;
+using UnityEditor.Callbacks;
 
 // UnityEditor.EditorWindow : Derive from this class to create an editor window.
 //Create your own custom editor window that can float free or be docked as a tab, just like the native windows in the Unity interface.
@@ -18,15 +18,29 @@ public class BehaviourTreeEditor : EditorWindow
    [MenuItem("BehaviourTreeEditor/Scripts/Editor ...")]
     public static void OpenWindow()
     {
-        BehaviourTreeEditor wnd = GetWindow<BehaviourTreeEditor>(); 
+        BehaviourTreeEditor wnd = GetWindow<BehaviourTreeEditor>();
         // GetWindow<>() : 
+        #region
         //t	-> The type of the window. Must derive from EditorWindow.
         //utility = false -> Set this to true, to create a floating utility window, false to create a normal window.
         //title = null -> If GetWindow creates a new window, it will get this title.If this value is null, use the class name as title.
         //focus = true -> Whether to give the window focus, if it already exists. (If GetWindow creates a new window, it will always get focus).
+        #endregion
         wnd.titleContent = new GUIContent("BehaviourTreeEditor"); // The GUIContent used for drawing the title of EditorWindows.
     }
 
+    //Adding this attribute to a static method will make the method be called when Unity is about to open an asset.
+    //Return true if you handled the opening of the asset or false if an external tool should open it.
+    [OnOpenAsset]
+    public static bool OnOpenAsset(int instanceId, int line)
+    {
+        if(Selection.activeObject is BehaviourTree)
+        {
+            OpenWindow();
+            return true;
+        }
+        return false; 
+    }
 
     //VisualTreeAsset :
     // An instance of this class holds a tree of `VisualElementAsset`s, created from a UXML file. Each node in the file corresponds to a `VisualElementAsset`. You can clone a `VisualTreeAsset` to yield a tree of `VisualElement`s.
