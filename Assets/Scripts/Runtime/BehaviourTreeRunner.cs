@@ -9,8 +9,8 @@ public class BehaviourTreeRunner : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        Debug.Log("Clone");
         tree = tree.Clone();
+        //tree.Bind(GetComponent<Context>());
     }
 
     // Update is called once per frame

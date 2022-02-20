@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.Callbacks;
+using System;
 
 // UnityEditor.EditorWindow : Derive from this class to create an editor window.
 //Create your own custom editor window that can float free or be docked as a tab, just like the native windows in the Unity interface.
@@ -66,11 +67,51 @@ public class BehaviourTreeEditor : EditorWindow
         OnSelectionChange();
     }
 
+    private void OnEnable()
+    {
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+    }
+
+    private void OnDisable()
+    {
+        EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+    }
+
+    private void OnPlayModeStateChanged(PlayModeStateChange obj)
+    {
+        switch (obj)
+        {
+            case PlayModeStateChange.EnteredEditMode:
+                OnSelectionChange();
+                break;
+            case PlayModeStateChange.ExitingEditMode:
+                break;
+            case PlayModeStateChange.EnteredPlayMode:
+                OnSelectionChange();
+                break;
+            case PlayModeStateChange.ExitingPlayMode:
+                break;
+        }
+    }
+
     // Called whenever the selection has changed.
     // called as soon as a scriptableObject BehaviourTree is selected in the hierarchy
     private void OnSelectionChange()
     {
         BehaviourTree tree = Selection.activeObject as BehaviourTree;
+        if (!tree)
+        {
+            if (Selection.activeGameObject)
+            {
+                BehaviourTreeRunner runner = Selection.activeGameObject.GetComponent<BehaviourTreeRunner>();
+                if (runner)
+                {
+                    tree = runner.tree;
+                }
+            }
+        }
+
         if (tree)
         {
             treeView.PopulateView(tree);
