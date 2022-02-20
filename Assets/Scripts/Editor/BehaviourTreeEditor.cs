@@ -3,26 +3,40 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 
-
+// UnityEditor.EditorWindow : Derive from this class to create an editor window.
+//Create your own custom editor window that can float free or be docked as a tab, just like the native windows in the Unity interface.
+//Editor windows are typically opened using a menu item.
 public class BehaviourTreeEditor : EditorWindow
 {
     BehaviourTreeView treeView;
     InspectorView inspectorView;
 
-    [MenuItem("BehaviourTreeEditor/Scripts/Editor ...")]
+//    The MenuItem attribute allows you to add menu items to the main menu and inspector context menus.
+//The MenuItem attribute turns any static function into a menu command.
+//Only static functions can use the MenuItem attribute.
+
+   [MenuItem("BehaviourTreeEditor/Scripts/Editor ...")]
     public static void OpenWindow()
     {
-        BehaviourTreeEditor wnd = GetWindow<BehaviourTreeEditor>();
-        wnd.titleContent = new GUIContent("BehaviourTreeEditor");
+        BehaviourTreeEditor wnd = GetWindow<BehaviourTreeEditor>(); 
+        // GetWindow<>() : 
+        //t	-> The type of the window. Must derive from EditorWindow.
+        //utility = false -> Set this to true, to create a floating utility window, false to create a normal window.
+        //title = null -> If GetWindow creates a new window, it will get this title.If this value is null, use the class name as title.
+        //focus = true -> Whether to give the window focus, if it already exists. (If GetWindow creates a new window, it will always get focus).
+        wnd.titleContent = new GUIContent("BehaviourTreeEditor"); // The GUIContent used for drawing the title of EditorWindows.
     }
 
+
+    //VisualTreeAsset :
+    // An instance of this class holds a tree of `VisualElementAsset`s, created from a UXML file. Each node in the file corresponds to a `VisualElementAsset`. You can clone a `VisualTreeAsset` to yield a tree of `VisualElement`s.
     public void CreateGUI()
     {
-        // Each editor window contains a root VisualElement object
+        // Each "EditorWindow" contains a root VisualElement object
         VisualElement root = rootVisualElement;
 
         // Import UXML
-        var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Scripts/Editor/BehaviourTreeEditor.uxml");
+        var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Scripts/Editor/BehaviourTreeEditor.uxml"); // Returns the first asset object of type type at given path assetPath.
         visualTree.CloneTree(root);
         
 
@@ -31,13 +45,15 @@ public class BehaviourTreeEditor : EditorWindow
         var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Scripts/Editor/BehaviourTreeEditor.uss");
         root.styleSheets.Add(styleSheet);
 
-        treeView = root.Q<BehaviourTreeView>();
-        treeView.OnNodeSelected = OnNodeSelectionChanged;
+        treeView = root.Q<BehaviourTreeView>(); // UQuery is a set of extension methods allowing you to select individual or collection of visualElements inside a complex hierarchy.
+        treeView.OnNodeSelected = OnNodeSelectionChanged; // not a called method, but a reference to a method. OnNodeSelected type is Action<NodeView>
         inspectorView = root.Q<InspectorView>();
         
         OnSelectionChange();
     }
 
+    // Called whenever the selection has changed.
+    // called as soon as a scriptableObject BehaviourTree is selected in the hierarchy
     private void OnSelectionChange()
     {
         BehaviourTree tree = Selection.activeObject as BehaviourTree;

@@ -9,8 +9,8 @@ using System.Linq;
 
 public class BehaviourTreeView : GraphView
 {
-    public Action<NodeView> OnNodeSelected;
-    public new class UxmlFactory : UxmlFactory<BehaviourTreeView, GraphView.UxmlTraits> { }
+    public Action<NodeView> OnNodeSelected; // Action type can store reference to Methods
+    public new class UxmlFactory : UxmlFactory<BehaviourTreeView, GraphView.UxmlTraits> { } // Instantiates and clones a TemplateContainer using the data read from a UXML file.
 
     BehaviourTree tree;
     public BehaviourTreeView()
@@ -28,28 +28,28 @@ public class BehaviourTreeView : GraphView
 
     NodeView FindNodeView(Node node)
     {
-        return GetNodeByGuid(node.guid) as NodeView;
+        return GetNodeByGuid(node.guid) as NodeView; // See node.guid = GUID.Generate() :)
     }
 
     internal void PopulateView(BehaviourTree tree)
     {
         this.tree = tree;
-
+        // GraphViewToolWindow.OnGraphViewChanged : Callback invoked when the GraphView has changed.
         graphViewChanged -= OnGraphViewChanged;
         DeleteElements(graphElements.ToList());
         graphViewChanged += OnGraphViewChanged;
 
+        // If no rootNode in the tree, create one
         if(tree.rootNode == null)
         {
             tree.rootNode = tree.CreateNode(typeof(RootNode)) as RootNode;
-            EditorUtility.SetDirty(tree);
-            AssetDatabase.SaveAssets();
+            EditorUtility.SetDirty(tree); // You can use SetDirty when you want to modify an object without creating an undo entry, but still ensure the change is registered and not lost. -> we have modified the Editor, need to apply the changes
+            AssetDatabase.SaveAssets(); // we have created a new Node in the BT.asset, need to apply the changes
         }
         // Creates nodes view
-        tree.nodes.ForEach(n => CreateNodeView(n));
+        tree.nodes.ForEach(n => CreateNodeView(n)); // System.Linq syntax
 
         // Creates edges view
-
         
         tree.nodes.ForEach(n =>
         {
@@ -59,7 +59,7 @@ public class BehaviourTreeView : GraphView
                 NodeView parentView = FindNodeView(n);
                 NodeView childView = FindNodeView(c);
 
-                Edge edge = parentView.output.ConnectTo(childView.input);
+                Edge edge = parentView.output.ConnectTo(childView.input); // connect parent to child
                 AddElement(edge);
 
             });
@@ -110,7 +110,13 @@ public class BehaviourTreeView : GraphView
 
     public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
     {
+        //Comment region
+        #region
         //base.BuildContextualMenu(evt);
+        // AppendAction : Add an item that will execute an action in the drop-down menu. The item is added at the end of the current item list.
+        //Add a new action for every ActionNode
+        //You can use an open and close set of curly braces to define a self containing block, which has its own scope.
+        #endregion
         {
             var types = TypeCache.GetTypesDerivedFrom<ActionNode>(); // get all nodes derived from an action nodes <3
             foreach (var type in types)
@@ -118,7 +124,7 @@ public class BehaviourTreeView : GraphView
                 evt.menu.AppendAction($"[{type.BaseType.Name}] {type.Name}", (a) => CreateNode(type));
             }
         }
-
+        //Add a new action for every CompositeNode
         {
             var types = TypeCache.GetTypesDerivedFrom<CompositeNode>(); // get all nodes derived from an composite nodes <3
             foreach (var type in types)
@@ -126,7 +132,7 @@ public class BehaviourTreeView : GraphView
                 evt.menu.AppendAction($"[{type.BaseType.Name}] {type.Name}", (a) => CreateNode(type));
             }
         }
-
+        //Add a new action for every DecoratorNode
         {
             var types = TypeCache.GetTypesDerivedFrom<DecoratorNode>(); // get all nodes derived from an decorator nodes <3
             foreach (var type in types)
