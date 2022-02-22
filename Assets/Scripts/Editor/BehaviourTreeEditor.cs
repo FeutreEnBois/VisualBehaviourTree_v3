@@ -11,6 +11,10 @@ public class BehaviourTreeEditor : EditorWindow
 {
     BehaviourTreeView treeView;
     InspectorView inspectorView;
+    IMGUIContainer blackboardView;
+
+    SerializedObject treeObject;
+    SerializedProperty blackboardProperty;
 
 //    The MenuItem attribute allows you to add menu items to the main menu and inspector context menus.
 //The MenuItem attribute turns any static function into a menu command.
@@ -63,7 +67,15 @@ public class BehaviourTreeEditor : EditorWindow
         treeView = root.Q<BehaviourTreeView>(); // UQuery is a set of extension methods allowing you to select individual or collection of visualElements inside a complex hierarchy.
         treeView.OnNodeSelected = OnNodeSelectionChanged; // not a called method, but a reference to a method. OnNodeSelected type is Action<NodeView>
         inspectorView = root.Q<InspectorView>();
-        
+        blackboardView = root.Q<IMGUIContainer>();
+        blackboardView.onGUIHandler = () => {
+            if (treeObject != null && treeObject.targetObject != null)
+            {
+                treeObject.Update();
+                EditorGUILayout.PropertyField(blackboardProperty);
+                treeObject.ApplyModifiedProperties();
+            }
+        };
         OnSelectionChange();
     }
 
@@ -115,6 +127,12 @@ public class BehaviourTreeEditor : EditorWindow
         if (tree)
         {
             treeView.PopulateView(tree);
+        }
+
+        if (tree != null)
+        {
+            treeObject = new SerializedObject(tree);
+            blackboardProperty = treeObject.FindProperty("blackboard");
         }
     }
 

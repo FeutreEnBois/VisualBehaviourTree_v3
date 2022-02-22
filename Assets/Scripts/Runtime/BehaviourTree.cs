@@ -119,13 +119,13 @@ public class BehaviourTree : ScriptableObject
         return tree;
     }
 
-    //public void Bind(Context context)
-    //{
-    //    Traverse(rootNode, node =>
-    //    {
-    //        node.context = context;
-    //        node.blackboard = blackboard;
-    //    });
-    //}
+    public void Bind(Context context)
+    {
+        Traverse(rootNode, node =>
+        {
+            node.context = context;
+            node.blackboard = blackboard;
+        });
+    }
 
 }
