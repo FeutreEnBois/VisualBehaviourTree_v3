@@ -13,20 +13,46 @@ public class BehaviourTreeView : GraphView
     public new class UxmlFactory : UxmlFactory<BehaviourTreeView, GraphView.UxmlTraits> { } // Instantiates and clones a TemplateContainer using the data read from a UXML file.
 
     BehaviourTree tree;
+    BehaviourTreeSettings settings;
+
+    public struct ScriptTemplate
+    {
+        public TextAsset templateFile;
+        public string defaultFileName;
+        public string subFolder;
+    }
+
+    public ScriptTemplate[] scriptFileAssets = {
+
+            new ScriptTemplate{ templateFile=BehaviourTreeSettings.GetOrCreateSettings().scriptTemplateActionNode, defaultFileName="NewActionNode.cs", subFolder="Actions" },
+            new ScriptTemplate{ templateFile=BehaviourTreeSettings.GetOrCreateSettings().scriptTemplateCompositeNode, defaultFileName="NewCompositeNode.cs", subFolder="Composites" },
+            new ScriptTemplate{ templateFile=BehaviourTreeSettings.GetOrCreateSettings().scriptTemplateDecoratorNode, defaultFileName="NewDecoratorNode.cs", subFolder="Decorators" },
+    };
+
     public BehaviourTreeView()
     {
+        settings = BehaviourTreeSettings.GetOrCreateSettings();
         Insert(0, new GridBackground());
 
         this.AddManipulator(new ContentZoomer());
         this.AddManipulator(new ContentDragger());
         this.AddManipulator(new SelectionDragger());
         this.AddManipulator(new RectangleSelector());
+        this.AddManipulator(new DoubleClickSelection());
 
-        var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Scripts/Editor/BehaviourTreeEditor.uss");
+        var styleSheet = settings.behaviourTreeStyle;
         styleSheets.Add(styleSheet);
+
+        Undo.undoRedoPerformed += OnUndoRedo;
     }
 
-    NodeView FindNodeView(Node node)
+    private void OnUndoRedo()
+    {
+        PopulateView(tree);
+        AssetDatabase.SaveAssets();
+    }
+
+    public NodeView FindNodeView(Node node)
     {
         return GetNodeByGuid(node.guid) as NodeView; // See node.guid = GUID.Generate() :)
     }
@@ -53,7 +79,7 @@ public class BehaviourTreeView : GraphView
         
         tree.nodes.ForEach(n =>
         {
-            var children = tree.GetChildren(n);
+            var children = BehaviourTree.GetChildren(n);
             children.ForEach(c =>
             {
                 NodeView parentView = FindNodeView(n);
@@ -105,11 +131,24 @@ public class BehaviourTreeView : GraphView
                 tree.AddChild(parentView.node, childView.node);
             });
         }
-            return graphViewChange;
+        nodes.ForEach((n) => {
+            NodeView view = n as NodeView;
+            view.SortChildren();
+        });
+
+        return graphViewChange;
     }
 
     public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
     {
+        // New script functions
+        evt.menu.AppendAction($"Create Script.../New Action Node", (a) => CreateNewScript(scriptFileAssets[0]));
+        evt.menu.AppendAction($"Create Script.../New Composite Node", (a) => CreateNewScript(scriptFileAssets[1]));
+        evt.menu.AppendAction($"Create Script.../New Decorator Node", (a) => CreateNewScript(scriptFileAssets[2]));
+        evt.menu.AppendSeparator();
+
+        Vector2 nodePosition = this.ChangeCoordinatesTo(contentViewContainer, evt.localMousePosition);
+
         //Comment region
         #region
         //base.BuildContextualMenu(evt);
@@ -121,7 +160,7 @@ public class BehaviourTreeView : GraphView
             var types = TypeCache.GetTypesDerivedFrom<ActionNode>(); // get all nodes derived from an action nodes <3
             foreach (var type in types)
             {
-                evt.menu.AppendAction($"[{type.BaseType.Name}] {type.Name}", (a) => CreateNode(type));
+                evt.menu.AppendAction($"[Action]/{type.Name}", (a) => CreateNode(type, nodePosition));
             }
         }
         //Add a new action for every CompositeNode
@@ -129,7 +168,7 @@ public class BehaviourTreeView : GraphView
             var types = TypeCache.GetTypesDerivedFrom<CompositeNode>(); // get all nodes derived from an composite nodes <3
             foreach (var type in types)
             {
-                evt.menu.AppendAction($"[{type.BaseType.Name}] {type.Name}", (a) => CreateNode(type));
+                evt.menu.AppendAction($"[Composite]/{type.Name}", (a) => CreateNode(type, nodePosition));
             }
         }
         //Add a new action for every DecoratorNode
@@ -137,14 +176,42 @@ public class BehaviourTreeView : GraphView
             var types = TypeCache.GetTypesDerivedFrom<DecoratorNode>(); // get all nodes derived from an decorator nodes <3
             foreach (var type in types)
             {
-                evt.menu.AppendAction($"[{type.BaseType.Name}] {type.Name}", (a) => CreateNode(type));
+                evt.menu.AppendAction($"[Decorator]/{type.Name}", (a) => CreateNode(type, nodePosition));
             }
         }
     }
 
-    private void CreateNode(System.Type type)
+    void SelectFolder(string path)
+    {
+        // https://forum.unity.com/threads/selecting-a-folder-in-the-project-via-button-in-editor-window.355357/
+        // Check the path has no '/' at the end, if it does remove it,
+        // Obviously in this example it doesn't but it might
+        // if your getting the path some other way.
+
+        if (path[path.Length - 1] == '/')
+            path = path.Substring(0, path.Length - 1);
+
+        // Load object
+        UnityEngine.Object obj = AssetDatabase.LoadAssetAtPath(path, typeof(UnityEngine.Object));
+
+        // Select the object in the project folder
+        Selection.activeObject = obj;
+
+        // Also flash the folder yellow to highlight it
+        EditorGUIUtility.PingObject(obj);
+    }
+
+    void CreateNewScript(ScriptTemplate template)
+    {
+        SelectFolder($"{settings.newNodeBasePath}/{template.subFolder}");
+        var templatePath = AssetDatabase.GetAssetPath(template.templateFile);
+        ProjectWindowUtil.CreateScriptAssetFromTemplateFile(templatePath, template.defaultFileName);
+    }
+
+    private void CreateNode(System.Type type, Vector2 position)
     {
         Node node = tree.CreateNode(type);
+        node.position = position;
         CreateNodeView(node);
     }
 
@@ -153,6 +220,14 @@ public class BehaviourTreeView : GraphView
         NodeView nodeView = new NodeView(node);
         nodeView.OnNodeSelected = OnNodeSelected;
         AddElement(nodeView);
+    }
+
+    public void UpdateNodeStates()
+    {
+        nodes.ForEach(n => {
+            NodeView view = n as NodeView;
+            view.UpdateState();
+        });
     }
 
 

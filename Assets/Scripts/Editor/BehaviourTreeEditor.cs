@@ -1,8 +1,11 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEditor.UIElements;
 using UnityEditor.Callbacks;
-using System;
 
 // UnityEditor.EditorWindow : Derive from this class to create an editor window.
 //Create your own custom editor window that can float free or be docked as a tab, just like the native windows in the Unity interface.
@@ -10,8 +13,17 @@ using System;
 public class BehaviourTreeEditor : EditorWindow
 {
     BehaviourTreeView treeView;
+    BehaviourTree tree;
+
     InspectorView inspectorView;
     IMGUIContainer blackboardView;
+
+    ToolbarMenu toolbarMenu;
+    TextField treeNameField;
+    TextField locationPathField;
+    Button createNewTreeButton;
+    VisualElement overlay;
+    BehaviourTreeSettings settings;
 
     SerializedObject treeObject;
     SerializedProperty blackboardProperty;
@@ -32,6 +44,7 @@ public class BehaviourTreeEditor : EditorWindow
         //focus = true -> Whether to give the window focus, if it already exists. (If GetWindow creates a new window, it will always get focus).
         #endregion
         wnd.titleContent = new GUIContent("BehaviourTreeEditor"); // The GUIContent used for drawing the title of EditorWindows.
+        wnd.minSize = new Vector2(800, 600);
     }
 
     //Adding this attribute to a static method will make the method be called when Unity is about to open an asset.
@@ -47,21 +60,39 @@ public class BehaviourTreeEditor : EditorWindow
         return false; 
     }
 
+    List<T> LoadAssets<T>() where T : UnityEngine.Object
+    {
+        string[] assetIds = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+        List<T> assets = new List<T>();
+        foreach (var assetId in assetIds)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(assetId);
+            T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+            assets.Add(asset);
+        }
+        return assets;
+    }
+
     //VisualTreeAsset :
     // An instance of this class holds a tree of `VisualElementAsset`s, created from a UXML file. Each node in the file corresponds to a `VisualElementAsset`. You can clone a `VisualTreeAsset` to yield a tree of `VisualElement`s.
     public void CreateGUI()
     {
+        settings = BehaviourTreeSettings.GetOrCreateSettings();
+
         // Each "EditorWindow" contains a root VisualElement object
         VisualElement root = rootVisualElement;
 
         // Import UXML
-        var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Scripts/Editor/BehaviourTreeEditor.uxml"); // Returns the first asset object of type type at given path assetPath.
+        var visualTree = settings.behaviourTreeXml;
         visualTree.CloneTree(root);
-        
+
+        /*var visualTree = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>("Assets/Scripts/Editor/BehaviourTreeEditor.uxml"); // Returns the first asset object of type type at given path assetPath.
+        visualTree.CloneTree(root);*/
+
 
         // A stylesheet can be added to a VisualElement.
         // The style will be applied to the VisualElement and all of its children.
-        var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Scripts/Editor/BehaviourTreeEditor.uss");
+        var styleSheet = settings.behaviourTreeStyle;
         root.styleSheets.Add(styleSheet);
 
         treeView = root.Q<BehaviourTreeView>(); // UQuery is a set of extension methods allowing you to select individual or collection of visualElements inside a complex hierarchy.
@@ -76,7 +107,34 @@ public class BehaviourTreeEditor : EditorWindow
                 treeObject.ApplyModifiedProperties();
             }
         };
-        OnSelectionChange();
+
+        // Toolbar assets menu
+        toolbarMenu = root.Q<ToolbarMenu>();
+        var behaviourTrees = LoadAssets<BehaviourTree>();
+        behaviourTrees.ForEach(tree => {
+            toolbarMenu.menu.AppendAction($"{tree.name}", (a) => {
+                Selection.activeObject = tree;
+            });
+        });
+        toolbarMenu.menu.AppendSeparator();
+        toolbarMenu.menu.AppendAction("New Tree...", (a) => CreateNewTree("NewBehaviourTree"));
+
+        // New Tree Dialog
+        treeNameField = root.Q<TextField>("TreeName");
+        locationPathField = root.Q<TextField>("LocationPath");
+        overlay = root.Q<VisualElement>("Overlay");
+        createNewTreeButton = root.Q<Button>("CreateButton");
+        createNewTreeButton.clicked += () => CreateNewTree(treeNameField.value);
+
+        if (tree == null)
+        {
+            OnSelectionChange();
+        }
+        else
+        {
+            SelectTree(tree);
+        }
+
     }
 
     private void OnEnable()
@@ -111,33 +169,78 @@ public class BehaviourTreeEditor : EditorWindow
     // called as soon as a scriptableObject BehaviourTree is selected in the hierarchy
     private void OnSelectionChange()
     {
-        BehaviourTree tree = Selection.activeObject as BehaviourTree;
-        if (!tree)
-        {
-            if (Selection.activeGameObject)
+        EditorApplication.delayCall += () => {
+            BehaviourTree tree = Selection.activeObject as BehaviourTree;
+            if (!tree)
             {
-                BehaviourTreeRunner runner = Selection.activeGameObject.GetComponent<BehaviourTreeRunner>();
-                if (runner)
+                if (Selection.activeGameObject)
                 {
-                    tree = runner.tree;
+                    BehaviourTreeRunner runner = Selection.activeGameObject.GetComponent<BehaviourTreeRunner>();
+                    if (runner)
+                    {
+                        tree = runner.tree;
+                    }
                 }
             }
+
+            SelectTree(tree);
+        };
+    }
+
+    void SelectTree(BehaviourTree newTree)
+    {
+
+        if (treeView == null)
+        {
+            return;
         }
 
-        if (tree)
+        if (!newTree)
+        {
+            return;
+        }
+
+        this.tree = newTree;
+
+        overlay.style.visibility = Visibility.Hidden;
+
+        if (Application.isPlaying)
+        {
+            treeView.PopulateView(tree);
+        }
+        else
         {
             treeView.PopulateView(tree);
         }
 
-        if (tree != null)
-        {
-            treeObject = new SerializedObject(tree);
-            blackboardProperty = treeObject.FindProperty("blackboard");
-        }
+
+        treeObject = new SerializedObject(tree);
+        blackboardProperty = treeObject.FindProperty("blackboard");
+
+        EditorApplication.delayCall += () => {
+            treeView.FrameAll();
+        };
     }
 
     void OnNodeSelectionChanged(NodeView node)
     {
         inspectorView.UpdateSelection(node);
+    }
+
+
+    private void OnInspectorUpdate()
+    {
+        treeView?.UpdateNodeStates();
+    }
+
+    void CreateNewTree(string assetName)
+    {
+        string path = System.IO.Path.Combine(locationPathField.value, $"{assetName}.asset");
+        BehaviourTree tree = ScriptableObject.CreateInstance<BehaviourTree>();
+        tree.name = treeNameField.ToString();
+        AssetDatabase.CreateAsset(tree, path);
+        AssetDatabase.SaveAssets();
+        Selection.activeObject = tree;
+        EditorGUIUtility.PingObject(tree);
     }
 }

@@ -17,6 +17,8 @@ public abstract class Node : ScriptableObject
     [HideInInspector] public Vector2 position;
     [HideInInspector] public Blackboard blackboard;
     [HideInInspector] public Context context;
+    [TextArea] public string description;
+    public bool drawGizmos = false;
 
     public State Update()
     {
@@ -39,6 +41,17 @@ public abstract class Node : ScriptableObject
     {
         return Instantiate(this);
     }
+
+    public void Abort()
+    {
+        BehaviourTree.Traverse(this, (node) => {
+            node.started = false;
+            node.state = State.Running;
+            node.OnStop();
+        });
+    }
+    public virtual void OnDrawGizmos() { }
+
     protected abstract void OnStart();
     protected abstract void OnStop();
     protected abstract State OnUpdate();
